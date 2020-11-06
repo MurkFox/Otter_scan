@@ -23,6 +23,7 @@ import json
 from random import shuffle, choice
 from dns import resolver
 import sys
+from libnmap.parser import NmapParser
 requests.packages.urllib3.disable_warnings()  # 去掉requests https 报错提示
 
 
@@ -232,6 +233,14 @@ class Scanner:
                                 temp1 = temp["ports"][0]
                                 url = self.protocol + temp["ip"] + ":" + str(temp1["port"])
                                 self.url_list.append(url)
+                elif ".xml" in filename:
+                    nmap_report = NmapParser.parse_fromfile(filename)
+                    Hosts = nmap_report.hosts
+                    for host in Hosts:
+                        for serv in host.services:
+                            if serv.state == "open" and "http" in serv.service:
+                                url = self.protocol + host.address + ":" + str(serv.port)
+                                self.url_list.append(url)
                 else:
                     with open(filename, 'r') as file:
                         lines = file.readlines()
@@ -290,11 +299,11 @@ class Scanner:
             if len(self.ip_list) > 0 and len(self.port_list) > 0:
                 for ip in self.ip_list:
                     for port in self.port_list:
-                        url = "http://" + ip + ":" + port
+                        url = self.protocol + ip + ":" + port
                         self.url_list.append(url)
             if len(self.url_list) > 0:
-                print("""任务数据加载成功
-------------------------------------------------------""")
+                print("""任务数据加载成功 %d
+------------------------------------------------------"""%len(self.url_list))
             else:
                 print("""没有加载到任务，请重新输入目标参数
 ------------------------------------------------------""")
@@ -304,8 +313,6 @@ class Scanner:
         except Exception as e:
             print(str(e))
             logging.warning(str(e))
-
-
 
     def auto_waf_idf(self):
         try:
@@ -458,7 +465,7 @@ if __name__ == '__main__':
                         help='输入单条url，脚本会直接对该url进行相关测试')
     parser.add_argument('-r', '--read',
                         dest='ip_file',
-                        help='支持从masscan json数据导出。支持csv，txt 详情参考samples.txt')
+                        help='支持masscan-json的数据导出，支持nmap-xml的数据导出。支持csv，txt 详情参考samples.txt')
     parser.add_argument('-t', '--thread',
                         dest='thread_num', default=50,
                         help='设置任务进程数，默认50，不建议太高，超过200会发生一些稀奇古怪的编码问题')
@@ -483,7 +490,7 @@ if __name__ == '__main__':
   / _ \| |_| |_ ___ _ __ ___  ___ __ _ _ __  
  | | | | __| __/ _ \ '__/ __|/ __/ _` | '_ \ 
  | |_| | |_| ||  __/ |  \__ \ (_| (_| | | | |
-  \___/ \__|\__\___|_|  |___/\___\__,_|_| |_| v 1.0.1
+  \___/ \__|\__\___|_|  |___/\___\__,_|_| |_| v 1.0.2
                                                         
 """)
     args = parser.parse_args()
