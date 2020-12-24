@@ -24,6 +24,8 @@ from random import shuffle, choice
 from dns import resolver
 import sys
 from libnmap.parser import NmapParser
+from auto_bypass_404 import  Bypass404
+
 requests.packages.urllib3.disable_warnings()  # 去掉requests https 报错提示
 
 
@@ -48,6 +50,34 @@ def get_user_agent():
         "Opera/9.80 (Macintosh; Intel Mac OS X 10.6.8; U; fr) Presto/2.9.168 Version/11.52", ]
     return choice(user_agents)
 
+# def dir_scan(url):
+#     headers = {'User-Agent': get_user_agent()}
+#     response = requests.get(url, headers=headers, timeout=5, verify=True, stream=True)
+#     if 'Content-Length' in response.headers.keys() and int(response.headers['Content-Length']) > 50000:
+#         print("%s is big page" % url)
+#         return 0
+#     bypass = Bypass404(url=url)
+#     bypass.main()
+#     if bypass.is_404(url="http://gwsq.bjchy.gov.cn/FCKeditor/_whatsnew.html"):
+#         print("url is 404")
+#         print("%s    %d" % (url, response.status_code))
+#         with open("tmp_dir_scan.txt", "a+") as file:
+#             res = url + "    " + str(response.status_code)
+#             file.write(res)
+#             file.write("\n")
+
+def dir_scan(url):
+    headers = {'User-Agent': get_user_agent()}
+    response = requests.get(url, headers=headers, timeout=5, verify=True, stream=True)
+    if 'Content-Length' in response.headers.keys() and int(response.headers['Content-Length']) > 50000:
+        print("%s is big page" % url)
+        return 0
+    if response.status_code != 404:
+        print("%s    %d" % (url, response.status_code))
+        with open("tmp_dir_scan.txt", "a+") as file:
+            res = url + "    " + str(response.status_code)
+            file.write(res)
+            file.write("\n")
 
 def title_grabe(url):
     try:
@@ -93,6 +123,7 @@ class Scanner:
         self.auto_404 = args.auto_404
         self.auto_waf = args.auto_waf
         self.auto_cdn = args.auto_cdn
+        self.auto_ds = args.auto_ds
         self.protocol = "http://"
         self.ip_list = []
         self.port_list = []
@@ -194,7 +225,7 @@ class Scanner:
                                 ports = ports.split(",")
                             for x in ips:
                                 for port in ports:
-                                    url = self.protocol + str(x) + ":" +str(port)
+                                    url = self.protocol + str(x) + ":" + str(port)
                                     self.url_list.append(url)
                         elif "-" in task_ip:
                             startip = task_ip.split("-")[0]
@@ -247,16 +278,21 @@ class Scanner:
                         test_data = lines[0][:-1]
                         if re.search("(http|https)://", test_data):
                             for lin in lines:
-                                text = lin.replace("\n","")
+                                text = lin.replace("\n", "")
                                 self.url_list.append(text)
                         elif ":" in test_data:
                             for lin in lines:
-                                text = lin.replace("\n","")
+                                text = lin.replace("\n", "")
                                 url = self.protocol + text
                                 self.url_list.append(url)
+                        elif re.search("((2(5[0-5]|[0-4]\d))|[0-1]?\d{1,2})(\.((2(5[0-5]|[0-4]\d))|[0-1]?\d{1,2})){3}$",
+                                       test_data):
+                            for lin in lines:
+                                text = lin.replace("\n", "")
+                                self.ip_list.append(text)
                         elif re.search("\d\s+\d", test_data):
                             for lin in lines:
-                                text = lin.replace("\n","")
+                                text = lin.replace("\n", "")
                                 data = text.split(" ")
                                 if "/" in data[0]:
                                     ips = IP(data[0])
@@ -292,7 +328,7 @@ class Scanner:
                                     else:
                                         ports = data[1].split(",")
                                     for port in ports:
-                                        url = self.protocol + add + ":" +str(port)
+                                        url = self.protocol + add + ":" + str(port)
                                         self.url_list.append(url)
 
             logging.info(str(self.url_list))
@@ -303,7 +339,7 @@ class Scanner:
                         self.url_list.append(url)
             if len(self.url_list) > 0:
                 print("""任务数据加载成功 %d
-------------------------------------------------------"""%len(self.url_list))
+------------------------------------------------------""" % len(self.url_list))
             else:
                 print("""没有加载到任务，请重新输入目标参数
 ------------------------------------------------------""")
@@ -399,6 +435,49 @@ class Scanner:
             print(str(e))
             logging.warning(str(e))
 
+    def auto_dir_scan(self):
+        try:
+            url_list = []
+            sen_dic = [
+                "/admin/",
+                "/.svn/",
+                "/.git/",
+                "/robots.txt",
+                "/phpinfo.php",
+                "/dashboard/",
+                "/Server/",
+                "/public/",
+                "/webmaster/",
+                "/config",
+                "/api/v1/",
+                "/editor/",
+                "/WEB-INF/web.xml",
+                "/PhpMyAdmin/",
+                "/manage/",
+
+            ]
+            for res_url in self.result:  # result sample: [["http://127.0.0.1:8080","apache","我的网站"],["url","server","title"]]
+                for targ in sen_dic:
+                    uri = res_url[0] + targ
+                    url_list.append(uri)
+            print("目录爆破加载任务 %d" % len(url_list))
+            if self.auto_404:
+                pass ## 有待完善
+            else:
+                taskpool = threadpool.ThreadPool(self.thread_num)
+                requests = threadpool.makeRequests(dir_scan, url_list)
+                for req in requests:
+                    taskpool.putRequest(req)
+
+                # 等待所有任务执行完成
+                taskpool.wait()
+
+
+
+
+        except Exception as e:
+            logging.warning(str(e))
+
     def result_get(self):
         with open("tmp.txt", "r") as file:
             lines = file.readlines()[2:]
@@ -453,6 +532,11 @@ class Scanner:
 开始检测目标是否启用CDN
 ------------------------------------------------------""")
                 self.auto_cdn_check()
+            if self.auto_ds:
+                print("""------------------------------------------------------
+开始检测目标是否存在敏感目录
+------------------------------------------------------""")
+                self.auto_dir_scan()
 
 
 if __name__ == '__main__':
@@ -477,20 +561,23 @@ if __name__ == '__main__':
                         help='扫描时使用https协议')
     parser.add_argument('-ad404', '--auto-detect-404',
                         dest='auto_404', action="store_true",
-                        help='检测网站是否启用智能404，默认不检测')
+                        help='目录爆破时启动智能404绕过，默认不开启')
     parser.add_argument('-adw', '--auto-detect-waf',
                         dest='auto_waf', action="store_true",
                         help='检测网站是否启用waf，默认不检测（触发waf规则可能封禁IP）')
     parser.add_argument('-adc', '--auto-detect-cdn',
                         dest='auto_cdn', action="store_true",
                         help='检测网站是否启用cdn，默认不检测')
+    parser.add_argument('-ads', '--auto-directory-scan',
+                        dest='auto_ds', action="store_true",
+                        help='检测网站是否存在敏感目录，默认不检测')
 
     print(""" 
    ___  _   _                                
   / _ \| |_| |_ ___ _ __ ___  ___ __ _ _ __  
  | | | | __| __/ _ \ '__/ __|/ __/ _` | '_ \ 
  | |_| | |_| ||  __/ |  \__ \ (_| (_| | | | |
-  \___/ \__|\__\___|_|  |___/\___\__,_|_| |_| v 1.0.2
+  \___/ \__|\__\___|_|  |___/\___\__,_|_| |_| v 1.0.3
                                                         
 """)
     args = parser.parse_args()
