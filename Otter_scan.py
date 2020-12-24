@@ -24,7 +24,6 @@ from random import shuffle, choice
 from dns import resolver
 import sys
 from libnmap.parser import NmapParser
-from auto_bypass_404 import  Bypass404
 
 requests.packages.urllib3.disable_warnings()  # 去掉requests https 报错提示
 
