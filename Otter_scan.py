@@ -49,21 +49,6 @@ def get_user_agent():
         "Opera/9.80 (Macintosh; Intel Mac OS X 10.6.8; U; fr) Presto/2.9.168 Version/11.52", ]
     return choice(user_agents)
 
-# def dir_scan(url):
-#     headers = {'User-Agent': get_user_agent()}
-#     response = requests.get(url, headers=headers, timeout=5, verify=True, stream=True)
-#     if 'Content-Length' in response.headers.keys() and int(response.headers['Content-Length']) > 50000:
-#         print("%s is big page" % url)
-#         return 0
-#     bypass = Bypass404(url=url)
-#     bypass.main()
-#     if bypass.is_404(url="http://gwsq.bjchy.gov.cn/FCKeditor/_whatsnew.html"):
-#         print("url is 404")
-#         print("%s    %d" % (url, response.status_code))
-#         with open("tmp_dir_scan.txt", "a+") as file:
-#             res = url + "    " + str(response.status_code)
-#             file.write(res)
-#             file.write("\n")
 
 def dir_scan(url):
     headers = {'User-Agent': get_user_agent()}
